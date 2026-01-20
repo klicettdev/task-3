@@ -119,6 +119,7 @@ export const ServiceForm: React.FC = () => {
                     <option value="" disabled>
                       Selecciona un rango
                     </option>
+                    <option value="100">$100</option>
                     <option value="500">$500</option>
                     <option value="1000">$1,000</option>
                     <option value="5000">$5,000</option>
