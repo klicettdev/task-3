@@ -46,7 +46,6 @@ export const ServiceForm: React.FC = () => {
       handleReset();
     } catch (error) {
       console.error("Error al enviar el formulario:", error);
-      toast.error("Error al enviar el formulario");
     }
   };
 
@@ -155,7 +154,14 @@ export const ServiceForm: React.FC = () => {
                 <button
                   type="submit"
                   className="btn btn-primary btn-lg flex-1 shadow-lg"
-                  disabled={!address || !formData.amount || !formData.deadline || !formData.description}
+                  disabled={
+                    !address ||
+                    !formData.amount ||
+                    !formData.deadline ||
+                    !formData.description ||
+                    !nativeCurrencyPrice ||
+                    !formData.service
+                  }
                 >
                   Crear Contrato Escrow
                 </button>

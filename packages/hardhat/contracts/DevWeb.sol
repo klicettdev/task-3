@@ -1,4 +1,4 @@
-//SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: MIT
 pragma solidity >=0.8.0 <0.9.0;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
@@ -29,10 +29,7 @@ contract DevWeb is Ownable, ReentrancyGuard {
     constructor(address _owner) Ownable(_owner) {}
 
     /**
-     * @notice El cliente crea el proyecto.
-     * @param _description Detalle del trabajo.
-     * @param _serviceType SEO, Web, etc.
-     * @param _daysToDeadline Días para entregar.
+     * @notice El cliente crea el proyecto y deposita los fondos.
      */
     function createProject(
         string memory _description, 
@@ -47,7 +44,6 @@ contract DevWeb is Ownable, ReentrancyGuard {
 
         projectCount++;
         
-        // Guardamos todo en el struct, incluyendo el msg.value
         projects[projectCount] = Project({
             client: msg.sender,
             amount: msg.value,
@@ -63,7 +59,7 @@ contract DevWeb is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice Marcar como entregado (Solo tú).
+     * @notice Marcar como entregado (Solo el freelancer/owner).
      */
     function markAsDelivered(uint256 _projectId, string memory _resultLink) external onlyOwner {
         Project storage project = projects[_projectId];
@@ -78,16 +74,16 @@ contract DevWeb is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice Cliente aprueba y se te envia el amount guardado.
+     * @notice El cliente aprueba el trabajo y libera los fondos al owner.
      */
     function approveAndRelease(uint256 _projectId) external nonReentrant {
         Project storage project = projects[_projectId];
         require(msg.sender == project.client, "No eres el cliente");
         require(project.status == State.AWAITING_APPROVAL, "No entregado aun");
 
-        uint256 payment = project.amount; // Recuperamos el monto guardado
+        uint256 payment = project.amount;
         project.status = State.COMPLETED;
-        project.amount = 0; // Reset por seguridad antes de transferir
+        project.amount = 0; // Reset por seguridad (Reentrancy)
 
         (bool success, ) = payable(owner()).call{value: payment}("");
         require(success, "Transferencia fallida");
@@ -96,7 +92,7 @@ contract DevWeb is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice Reclamar fondos si el cliente se olvida (7 dias).
+     * @notice Reclamar fondos si el cliente no aprueba tras 7 dias de la entrega.
      */
     function claimExpiredFunds(uint256 _projectId) external onlyOwner nonReentrant {
         Project storage project = projects[_projectId];
@@ -114,12 +110,12 @@ contract DevWeb is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice Reembolso para el cliente si no cumples el plazo.
+     * @notice Reembolso para el cliente si se vence el plazo sin entrega.
      */
     function requestRefund(uint256 _projectId) external nonReentrant {
         Project storage project = projects[_projectId];
         require(msg.sender == project.client, "No eres el cliente");
-        require(project.status == State.AWAITING_DELIVERY, "Ya entregado");
+        require(project.status == State.AWAITING_DELIVERY, "Ya entregado o procesado");
         require(block.timestamp > project.deadline, "Plazo no vencido");
 
         uint256 refundAmount = project.amount;
@@ -131,11 +127,25 @@ contract DevWeb is Ownable, ReentrancyGuard {
     }
 
     // --- FUNCIONES DE LECTURA ---
-    function getMyProjects() external view returns (uint256[] memory) {
+
+    /**
+     * @notice Devuelve los IDs de proyectos visibles segun quien llame.
+     * Si es el admin ve todo. Si es cliente ve los suyos.
+     */
+    function getVisibleProjects() external view returns (uint256[] memory) {
+        if (msg.sender == owner()) {
+            uint256[] memory allIds = new uint256[](projectCount);
+            for (uint256 i = 0; i < projectCount; i++) {
+                allIds[i] = i + 1;
+            }
+            return allIds;
+        } 
+        
         uint256 count = 0;
         for (uint256 i = 1; i <= projectCount; i++) {
             if (projects[i].client == msg.sender) count++;
         }
+        
         uint256[] memory myIds = new uint256[](count);
         uint256 index = 0;
         for (uint256 i = 1; i <= projectCount; i++) {
@@ -145,13 +155,5 @@ contract DevWeb is Ownable, ReentrancyGuard {
             }
         }
         return myIds;
-    }
-
-    function getAllProjects() external view onlyOwner returns (uint256[] memory) {
-        uint256[] memory allIds = new uint256[](projectCount);
-        for (uint256 i = 0; i < projectCount; i++) {
-            allIds[i] = i + 1;
-        }
-        return allIds;
     }
 }
